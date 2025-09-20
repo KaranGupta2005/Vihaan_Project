@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+add markers for each team and give me completed code- <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -254,7 +254,7 @@
       }
 
       teams.forEach(team => {
-        const marker = L.marker(team.coords, { icon: createMarkerIcon(team.color) })
+        const marker = L.marker(team.coords)
           .addTo(map)
           .bindPopup(`<b>${team.name} Team</b><br>${team.popup}`)
           .on('click', () => {
@@ -277,4 +277,5 @@
   </script>
 </body>
 </html>
+
 
