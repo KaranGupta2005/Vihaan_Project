@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Defense Deployment Predictor</title>
+
+  <!-- Leaflet Map API -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    /* ------------------ Base Styling ------------------ */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: #e2e8f0;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e3a8a, #3b82f6, #2563eb);
+      padding: 30px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    header h1 {
+      font-size: 36px;
+      color: #f8fafc;
+      font-weight: 700;
+      letter-spacing: 2px;
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 12px; height: 12px;
+      background: #10b981;
+      border-radius: 50%;
+      margin-left: 10px;
+      animation: pulse 2s infinite;
+      box-shadow: 0 0 10px #10b981;
+    }
+    @keyframes pulse {
+      0%,100%{transform:scale(1);opacity:1}
+      50%{transform:scale(1.2);opacity:0.7}
+    }
+    .container { max-width: 1400px; margin: auto; padding: 40px 20px; }
+
+    /* ------------------ Intro Card ------------------ */
+    .intro {
+      text-align: center;
+      margin-bottom: 40px;
+      background: rgba(30,41,59,0.6);
+      padding: 25px;
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+    }
+
+    /* ------------------ Stats Cards ------------------ */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit,minmax(280px,1fr));
+      gap: 25px;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: linear-gradient(145deg,#1e293b,#334155);
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      transition: transform 0.4s;
+      position: relative;
+    }
+    .card:hover { transform: translateY(-8px) scale(1.02); }
+    .card h3 { font-size: 14px; color: #94a3b8; margin-bottom: 10px; }
+    .card .value {
+      font-size: 34px; font-weight: bold; color: #f1f5f9;
+      font-family: 'Courier New', monospace;
+    }
+    .card .trend { font-size: 14px; color: #10b981; }
+
+    /* ------------------ Sections ------------------ */
+    .section {
+      margin-bottom: 40px;
+      background: linear-gradient(145deg,#1e293b,#334155);
+      padding: 35px;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .section-title {
+      font-size: 22px; margin-bottom: 20px; color: #60a5fa;
+      font-weight: 600; display: flex; align-items: center; gap: 10px;
+    }
+
+    /* ------------------ Map ------------------ */
+    .map-container {
+      height: 450px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 2px solid #475569;
+    }
+    #tacticalMap { width: 100%; height: 100%; }
+
+    .leaflet-popup-content-wrapper {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 12px;
+      border: 1px solid #475569;
+    }
+    .leaflet-popup-tip { background: #1e293b; }
+
+    .sector-active {
+      filter: drop-shadow(0 0 8px #10b981);
+    }
+
+    /* ------------------ Deployment Controls ------------------ */
+    .deployment-controls {
+      display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
+      gap: 20px; margin-top: 20px;
+    }
+    .control-group { background: #1e293b; padding: 20px; border-radius: 12px; }
+    .control-group label { display: block; margin-bottom: 8px; color: #cbd5e1; }
+    .control-group input, .control-group select {
+      width: 100%; padding: 10px;
+      border: 1px solid #475569; border-radius: 8px;
+      background: #334155; color: #f1f5f9;
+    }
+    .deploy-btn {
+      grid-column: 1/-1; padding: 15px; font-size: 18px; font-weight: bold;
+      background: linear-gradient(135deg,#3b82f6,#1e40af);
+      border: none; color: #fff; border-radius: 12px;
+      cursor: pointer; transition: 0.3s;
+    }
+    .deploy-btn:hover { transform: scale(1.03); }
+
+    /* ------------------ Prediction & Threats ------------------ */
+    .prediction {
+      background: linear-gradient(135deg,#1e40af,#3730a3);
+      padding: 25px; border-radius: 16px; border-left: 5px solid #10b981;
+      position: relative;
+    }
+    .prediction::before {
+      content: '🎯'; position: absolute; top: 15px; right: 20px; font-size: 24px;
+    }
+    .threat-list { list-style: none; margin-top: 15px; display: grid; gap: 15px; }
+    .threat-item {
+      padding: 15px; border-radius: 12px;
+      background: linear-gradient(135deg,#dc2626,#991b1b);
+      border-left: 5px solid #fbbf24; font-weight: 500;
+    }
+    .threat-item .severity { float: right; font-size: 12px; }
+
+    /* ------------------ Controls Panel ------------------ */
+    .controls-panel {
+      position: fixed; bottom: 20px; right: 20px;
+      background: #1e293b; padding: 20px;
+      border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    .toggle-btn {
+      background: #3b82f6; border: none; padding: 8px 12px;
+      color: white; border-radius: 8px; margin: 3px; cursor: pointer;
+    }
+    .toggle-btn.active { background: #10b981; }
+
+    footer { text-align: center; padding: 30px; color: #64748b; font-size: 14px; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Defense Deployment Predictor <span class="status-indicator"></span></h1>
+  </header>
+
+  <div class="container">
+    <div class="intro"><p>AI-powered tactical deployment with real-time threat analysis</p></div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="card"><h3>Personnel</h3><div class="value" id="personnel-count">1,274</div><div class="trend">↗ +12%</div></div>
+      <div class="card"><h3>Equipment</h3><div class="value" id="equipment-count">603</div><div class="trend">↗ +8%</div></div>
+      <div class="card"><h3>Operations</h3><div class="value" id="operations-count">36</div><div class="trend">→ Stable</div></div>
+    </div>
+
+    <!-- Map -->
+    <div class="section">
+      <h2 class="section-title">🗺️ Interactive Tactical Map</h2>
+      <div class="map-container"><div id="tacticalMap"></div></div>
+
+      <div class="deployment-controls">
+        <div class="control-group">
+          <label>Personnel</label>
+          <input type="number" id="personnel-input" value="50">
+        </div>
+        <div class="control-group">
+          <label>Equipment</label>
+          <select id="equipment-select">
+            <option value="drones">Surveillance Drones</option>
+            <option value="vehicles">Armored Vehicles</option>
+            <option value="comms">Comms Arrays</option>
+            <option value="medical">Medical Units</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Sector</label>
+          <select id="sector-select">
+            <option value="Alpha">Alpha</option>
+            <option value="Bravo" selected>Bravo</option>
+            <option value="Charlie">Charlie</option>
+            <option value="Delta">Delta</option>
+            <option value="Echo">Echo</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Deployment Time</label>
+          <input type="time" id="time-input" value="02:00">
+        </div>
+        <button class="deploy-btn" onclick="deployForces()">Deploy</button>
+      </div>
+    </div>
+
+    <!-- Prediction -->
+    <div class="section">
+      <h2 class="section-title">🎯 AI Prediction</h2>
+      <div class="prediction" id="prediction-text">
+        Deploy 50 troops with drones to Sector Bravo by 02:00 hrs. Infiltration risk: 73%.
+      </div>
+    </div>
+
+    <!-- Threats -->
+    <div class="section">
+      <h2 class="section-title">⚠️ Live Threats</h2>
+      <ul class="threat-list" id="threat-list">
+        <li class="threat-item">🚁 Aircraft detected near Northern Ridge <span class="severity">HIGH</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-panel">
+    <button class="toggle-btn active" onclick="toggleMode(this,'realtime')">Realtime</button>
+    <button class="toggle-btn" onclick="toggleMode(this,'simulation')">Simulation</button>
+    <button class="toggle-btn" onclick="toggleMode(this,'training')">Training</button>
+  </div>
+
+  <footer>&copy; 2025 Defense AI Command | Classified Access Only</footer>
+
+  <script>
+    let personnelCount=1274, equipmentCount=603, operationsCount=36, currentMode="realtime";
+    let map, sectorMarkers={};
+
+    function initializeMap(){
+      map=L.map("tacticalMap").setView([28.61,77.23],5); // India coords
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(map);
+
+      const sectors={
+        Alpha:[29,77],
+        Bravo:[28.5,78],
+        Charlie:[27,76],
+        Delta:[26.5,75],
+        Echo:[28,76.5]
+      };
+      for(const [name,coords] of Object.entries(sectors)){
+        const marker=L.marker(coords).addTo(map).bindPopup(`<b>Sector ${name}</b>`);
+        sectorMarkers[name]=marker;
+      }
+      highlightSector("Bravo");
+    }
+
+    function highlightSector(name){
+      Object.values(sectorMarkers).forEach(m=>m.getElement()?.classList.remove("sector-active"));
+      sectorMarkers[name].getElement().classList.add("sector-active");
+      sectorMarkers[name].openPopup();
+    }
+
+    function deployForces(){
+      const personnel=document.getElementById("personnel-input").value;
+      const equipment=document.getElementById("equipment-select").value;
+      const sector=document.getElementById("sector-select").value;
+      const time=document.getElementById("time-input").value;
+
+      document.getElementById("prediction-text").textContent=
+        `Deploy ${personnel} troops with ${equipment} to Sector ${sector} by ${time} hrs.`;
+
+      personnelCount+=parseInt(personnel);
+      equipmentCount+=Math.floor(personnel*0.3);
+      operationsCount++;
+      document.getElementById("personnel-count").textContent=personnelCount.toLocaleString();
+      document.getElementById("equipment-count").textContent=equipmentCount.toLocaleString();
+      document.getElementById("operations-count").textContent=operationsCount.toLocaleString();
+
+      highlightSector(sector);
+    }
+
+    function toggleMode(btn,mode){
+      document.querySelectorAll(".toggle-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      currentMode=mode;
+      alert(`Mode switched to: ${mode}`);
+    }
+
+    document.addEventListener("DOMContentLoaded",()=>{initializeMap();});
+  </script>
+</body>
+</html>
